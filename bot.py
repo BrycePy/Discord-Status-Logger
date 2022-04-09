@@ -57,15 +57,16 @@ async def on_member_update(before: discord.Member, after: discord.Member):
     after_status = get_status_emoji(after)
 
     if before_status != after_status:
-        message = f"`{get_tag(after)} {before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R>"
-        last_active_text[after.id] = (message, after)
+        message = f"`{before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R> `({get_tag(after)})`"
+        message_sum = f"`{get_tag(after)}`\n`    {before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R>"
+        last_active_text[after.id] = (message_sum, after)
         await log_channel.send(message)
 
     await update_last_active()
 
 async def update_last_active():
     buffer = ""
-    for uid in sorted(last_active_text.keys()):
+    for uid in sorted(last_active_text.keys(), key = lambda x: get_tag(last_active_text[x][1])):
         message, user = last_active_text[uid]
         buffer += f"{message}\n"
 
