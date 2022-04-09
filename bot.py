@@ -8,34 +8,75 @@ intents.typing = True
 intents.presences = True
 
 bot = commands.Bot('>', intents=intents)
-dm: discord.TextChannel = None
-dup_fix = {}
-status_duration = {}
+
+log_channel: discord.TextChannel = None
+sum_channel: discord.TextChannel = None
+sum_channel_message: discord.Message = None
+
+user_guild_table = {}
+last_status_update = {}
+last_active_text = {}
+
+with open("token.json", "r") as f:
+    data = json.load(f)
+    token = data["token"]
+    log_channel_id = data["log_channel"]
+    sum_channel_id = data["sum_channel"]
 
 @bot.event
 async def on_ready():
-    global dm
+    global log_channel, sum_channel, sum_channel_message
     await bot.change_presence(status=discord.Status.idle)
-    dm = await bot.fetch_channel(962036905996853321)
-    print('ready')
+    log_channel = await bot.fetch_channel(log_channel_id)
+    sum_channel = await bot.fetch_channel(sum_channel_id)
+
+    try:
+        last_sum_message = await sum_channel.fetch_message(sum_channel.last_message_id)
+        if last_sum_message.author.id == bot.user.id:
+            sum_channel_message = last_sum_message
+            await last_sum_message.edit(content="`starting up...`")
+        else:
+            raise discord.NotFound
+
+    except discord.NotFound:
+        sum_channel_message = await sum_channel.send("`starting up...`")
+        
+    print('Bot is ready.')
 
 @bot.listen()
 async def on_member_update(before: discord.Member, after: discord.Member):
-    dup_fix[after.id] = dup_fix.get(after.id, after.guild.id)
-    if dup_fix[after.id] != after.guild.id: return
+    user_guild_table[after.id] = user_guild_table.get(after.id, after.guild.id)
+    if user_guild_table[after.id] != after.guild.id: return
 
-    duration = round(time.time() - status_duration.get(after.id, time.time()+1))
-    status_duration[after.id] = time.time()
-    before_status = get_status_string(before)
-    after_status = get_status_string(after)
-    obf_name = after.display_name[:1] + after.display_name[-2:][::-1]
-    obf_name = obf_name.lower()[::-1]
+    status_update_time = last_status_update.get(after.id, time.time()+1)
+    last_status_update[after.id] = time.time()
+    duration = round(time.time() - status_update_time)
+    duration_hr = round(duration/3600, 1)
+    
+    before_status = get_status_emoji(before)
+    after_status = get_status_emoji(after)
+
     if before_status != after_status:
-        message = f"`{obf_name} {before_status}({round(duration/3600, 1)} hrs) >> {after_status}` <t:{int(time.time())}:R>"
-        await dm.send(message)
+        message = f"`{get_tag(after)} {before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R>"
+        last_active_text[after.id] = (message, after)
+        await log_channel.send(message)
 
-def get_status_string(user: discord.Member) -> str:
-    emojis = "   🔴  ⬛⚫"
+    await update_last_active()
+
+async def update_last_active():
+    buffer = ""
+    for uid in sorted(last_active_text.keys()):
+        message, user = last_active_text[uid]
+        buffer += f"{message}\n"
+
+    if sum_channel_message:
+        await sum_channel_message.edit(content=buffer)
+
+def get_tag(user: discord.Member) -> str:
+    return f"{user.name}#{user.discriminator}"
+
+def get_status_emoji(user: discord.Member) -> str:
+    emojis = "🟩🟢🟥🔴🟨🟡⬛⚫"
     status = [discord.Status.online, discord.Status.dnd,
               discord.Status.idle, discord.Status.offline]
     status_index = status.index(user.status) * 2
@@ -44,9 +85,5 @@ def get_status_string(user: discord.Member) -> str:
         status_index += 1
 
     return emojis[status_index]
-
-
-with open("token.json", "r") as f:
-    token = json.load(f)["token"]
 
 bot.run(token)
