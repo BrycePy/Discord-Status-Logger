@@ -18,7 +18,7 @@ user_guild_table = {}
 last_status_update = {}
 last_active_text = {}
 
-last_message_sent = 0
+last_message_edit_ts = 0
 
 with open("token.json", "r") as f:
     data = json.load(f)
@@ -48,6 +48,7 @@ async def on_ready():
 
 @bot.listen()
 async def on_member_update(before: discord.Member, after: discord.Member):
+    global last_message_edit_ts
     user_guild_table[after.id] = user_guild_table.get(after.id, after.guild.id)
     if user_guild_table[after.id] != after.guild.id: return
 
@@ -65,12 +66,12 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         # message = f"`{before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R> `({get_tag(after)})`"
         # await log_channel.send(message)
 
-    if last_message_sent + 5 < time.time():
-        last_message_sent = time.time()
+    if last_message_edit_ts + 5 < time.time():
+        last_message_edit_ts = time.time()
         await update_last_active()
     else:
         await asyncio.sleep(5)
-        if last_message_sent + 5 < time.time():
+        if last_message_edit_ts + 5 < time.time():
             await update_last_active()
     
 
