@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import json
 import time
+import asyncio
 
 intents = discord.Intents.default()
 intents.typing = True
@@ -16,6 +17,8 @@ sum_channel_message: discord.Message = None
 user_guild_table = {}
 last_status_update = {}
 last_active_text = {}
+
+last_message_sent = 0
 
 with open("token.json", "r") as f:
     data = json.load(f)
@@ -57,12 +60,19 @@ async def on_member_update(before: discord.Member, after: discord.Member):
     after_status = get_status_emoji(after)
 
     if before_status != after_status:
-        message = f"`{before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R> `({get_tag(after)})`"
         message_sum = f"`{get_tag(after)}`\n`    {before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R>"
         last_active_text[after.id] = (message_sum, after)
-        await log_channel.send(message)
+        # message = f"`{before_status}({duration_hr} hrs) >> {after_status}` <t:{int(time.time())}:R> `({get_tag(after)})`"
+        # await log_channel.send(message)
 
-    await update_last_active()
+    if last_message_sent + 5 < time.time():
+        last_message_sent = time.time()
+        await update_last_active()
+    else:
+        await asyncio.sleep(5)
+        if last_message_sent + 5 < time.time():
+            await update_last_active()
+    
 
 async def update_last_active():
     buffer = ""
